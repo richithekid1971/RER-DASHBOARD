@@ -285,7 +285,10 @@ async function fetchData(){
     document.getElementById('liveDot').className='live-dot';
     document.getElementById('liveLabel').textContent='En vivo — MT5';
     document.getElementById('lastUpdate').textContent='Actualizado '+new Date().toLocaleTimeString('es-ES');
-    if(data.systems && data.systems.length>0) render(data);
+    // Always render real data when it arrives
+    if(data && !data.no_data) {
+      render(data);
+    }
   }catch(e){
     if(!lastData){
       document.getElementById('liveDot').className='live-dot stale';
