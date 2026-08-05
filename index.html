@@ -106,10 +106,7 @@
 
 <div class="main">
 
-  <div class="info-box">
-    <strong>📡 Para conectar datos reales desde MT5:</strong> copia el archivo <code>RER_IncubadoraMonitor.mq5</code> a tu carpeta <code>MQL5/Experts/</code>, compílalo y arrástralo a un gráfico. Luego inicia <code>server.py</code> con Python (<code>python server.py</code>) y este dashboard se conectará automáticamente cada 10 segundos.<br>
-    Mientras tanto estás viendo <strong>datos demo</strong> basados en tu historial real.
-  </div>
+
 
   <div class="section-header">
     <span class="section-title">Top 15 sistemas</span>
@@ -288,18 +285,17 @@ async function fetchData(){
     document.getElementById('liveDot').className='live-dot';
     document.getElementById('liveLabel').textContent='En vivo — MT5';
     document.getElementById('lastUpdate').textContent='Actualizado '+new Date().toLocaleTimeString('es-ES');
-    render(data);
+    if(data.systems && data.systems.length>0) render(data);
   }catch(e){
-    if(!lastData||lastData===DEMO){
+    if(!lastData){
       document.getElementById('liveDot').className='live-dot stale';
-      document.getElementById('liveLabel').textContent='Modo demo';
-      document.getElementById('lastUpdate').textContent='Demo — inicia server.py para datos reales';
+      document.getElementById('liveLabel').textContent='Sin conexion';
+      document.getElementById('lastUpdate').textContent='Esperando datos del EA...';
       render(DEMO);
     }
   }
 }
 
-render(DEMO);
 fetchData();
 setInterval(fetchData,10000);
 </script>
