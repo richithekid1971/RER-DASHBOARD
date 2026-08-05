@@ -282,7 +282,7 @@ function render(data){
 // Intentar conectar al servidor cada 10s; si falla, demo
 async function fetchData(){
   try{
-    const res=await fetch('http://localhost:8080/data',{signal:AbortSignal.timeout(3000)});
+    const res=await fetch('/data',{signal:AbortSignal.timeout(3000)});
     const data=await res.json();
     lastData=data;
     document.getElementById('liveDot').className='live-dot';
