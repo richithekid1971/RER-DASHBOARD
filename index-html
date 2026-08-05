@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RER Incubadora — Monitor en Vivo</title>
+<style>
+  :root {
+    --bg:#0a0d12;--surface:#111620;--surface2:#171e2e;
+    --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.13);
+    --text:#e8eaf0;--muted:#5a6480;--accent:#3b82f6;
+    --green:#22c55e;--green-dim:rgba(34,197,94,0.12);
+    --amber:#f59e0b;--amber-dim:rgba(245,158,11,0.10);
+    --red:#ef4444;--red-dim:rgba(239,68,68,0.10);
+    --gold:#fbbf24;--font-mono:'Consolas',monospace;--radius:8px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:14px;min-height:100vh;}
+  header{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 24px;display:flex;align-items:center;gap:16px;position:sticky;top:0;z-index:100;}
+  .logo{font-size:11px;font-weight:700;letter-spacing:0.18em;color:var(--accent);text-transform:uppercase;}
+  .header-title{font-size:15px;font-weight:600;}
+  .header-sub{font-size:11px;color:var(--muted);}
+  .spacer{flex:1;}
+  .live-dot{width:8px;height:8px;border-radius:50%;background:var(--green);animation:pulse 2s infinite;flex-shrink:0;}
+  .live-dot.stale{background:var(--amber);animation:none;}
+  .live-dot.dead{background:var(--red);animation:none;}
+  @keyframes pulse{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(34,197,94,0.4);}50%{opacity:.8;box-shadow:0 0 0 5px rgba(34,197,94,0);}}
+  .live-label{font-size:11px;color:var(--muted);}
+  #lastUpdate{font-size:11px;color:var(--muted);font-family:var(--font-mono);}
+  .metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:1px;background:var(--border);border-bottom:1px solid var(--border);}
+  .metric{background:var(--surface);padding:14px 20px;display:flex;flex-direction:column;gap:4px;}
+  .metric-label{font-size:10px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);}
+  .metric-value{font-size:22px;font-weight:700;font-family:var(--font-mono);color:var(--text);line-height:1;}
+  .metric-value.pos{color:var(--green);}.metric-value.acc{color:var(--accent);}
+  .metric-sub{font-size:11px;color:var(--muted);font-family:var(--font-mono);}
+  .main{padding:20px 24px;max-width:1400px;margin:0 auto;}
+  .section-header{display:flex;align-items:center;gap:10px;margin-bottom:14px;}
+  .section-title{font-size:12px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);}
+  .section-count{font-size:11px;font-weight:600;background:var(--surface2);border:1px solid var(--border2);color:var(--accent);padding:2px 8px;border-radius:10px;}
+  .controls{display:flex;gap:6px;margin-left:auto;flex-wrap:wrap;}
+  .ctrl-btn{font-size:11px;font-weight:500;padding:4px 10px;border-radius:5px;border:1px solid var(--border2);background:transparent;color:var(--muted);cursor:pointer;transition:all .15s;}
+  .ctrl-btn:hover{background:var(--surface2);color:var(--text);}
+  .ctrl-btn.active{background:var(--accent);border-color:var(--accent);color:#fff;}
+  .table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:20px;}
+  table{width:100%;border-collapse:collapse;}
+  thead th{padding:10px 12px;font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);background:var(--surface2);text-align:left;border-bottom:1px solid var(--border);white-space:nowrap;}
+  thead th.r{text-align:right;}
+  tbody tr{border-bottom:1px solid var(--border);transition:background .1s;}
+  tbody tr:last-child{border-bottom:none;}
+  tbody tr:hover{background:rgba(255,255,255,0.025);}
+  tbody tr.top3{background:rgba(251,191,36,0.04);}
+  tbody tr.passes{background:var(--green-dim);}
+  td{padding:11px 12px;font-size:13px;color:var(--text);white-space:nowrap;}
+  td.r{text-align:right;}
+  .rank{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:5px;font-size:11px;font-weight:700;font-family:var(--font-mono);background:var(--surface2);color:var(--muted);}
+  .rank.r1{background:rgba(251,191,36,0.15);color:var(--gold);}
+  .rank.r2{background:rgba(148,163,184,0.15);color:#94a3b8;}
+  .rank.r3{background:rgba(180,120,80,0.15);color:#b47850;}
+  .sys-name{font-weight:600;font-size:13px;}
+  .sys-magic{font-size:10px;color:var(--muted);font-family:var(--font-mono);display:block;margin-top:1px;}
+  .badge{display:inline-block;font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;letter-spacing:0.05em;}
+  .badge-pass{background:var(--green-dim);color:var(--green);border:1px solid rgba(34,197,94,0.2);}
+  .badge-warn{background:var(--amber-dim);color:var(--amber);border:1px solid rgba(245,158,11,0.2);}
+  .badge-nd{background:var(--surface2);color:var(--muted);border:1px solid var(--border);}
+  .bar-wrap{display:flex;align-items:center;gap:7px;}
+  .bar{height:5px;border-radius:3px;flex:1;background:var(--surface2);overflow:hidden;min-width:50px;}
+  .bar-fill{height:100%;border-radius:3px;transition:width .5s;}
+  .bar-val{font-family:var(--font-mono);font-size:12px;font-weight:600;min-width:38px;text-align:right;}
+  .pf-hi{color:var(--green);font-weight:700;font-family:var(--font-mono);}
+  .pf-mid{color:var(--amber);font-weight:600;font-family:var(--font-mono);}
+  .pf-lo{color:var(--muted);font-family:var(--font-mono);}
+  .pf-inf{color:var(--accent);font-weight:700;font-family:var(--font-mono);}
+  .pos{color:var(--green);font-family:var(--font-mono);font-weight:600;}
+  .neg{color:var(--red);font-family:var(--font-mono);font-weight:600;}
+  .open-badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;padding:2px 7px;border-radius:4px;background:rgba(59,130,246,0.12);color:var(--accent);border:1px solid rgba(59,130,246,0.2);}
+  .open-dot{width:5px;height:5px;border-radius:50%;background:var(--accent);animation:pulse 1.5s infinite;}
+  .info-box{background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius);padding:16px 20px;margin-bottom:20px;font-size:12px;line-height:1.7;color:var(--muted);}
+  .info-box strong{color:var(--text);}
+  .info-box code{background:rgba(59,130,246,0.15);color:var(--accent);padding:1px 6px;border-radius:3px;font-family:var(--font-mono);}
+  footer{text-align:center;padding:16px;font-size:11px;color:var(--muted);border-top:1px solid var(--border);}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <div class="logo">RERTRADING</div>
+    <div style="display:flex;align-items:baseline;gap:6px">
+      <span class="header-title">Incubadora Monitor</span>
+      <span class="header-sub">USATECH · NDX</span>
+    </div>
+  </div>
+  <div class="spacer"></div>
+  <div id="lastUpdate">Demo</div>
+  <div class="live-dot stale" id="liveDot"></div>
+  <span class="live-label" id="liveLabel">Modo demo</span>
+</header>
+
+<div class="metrics">
+  <div class="metric"><span class="metric-label">Balance</span><span class="metric-value acc" id="mBalance">—</span><span class="metric-sub" id="mAccount">—</span></div>
+  <div class="metric"><span class="metric-label">Equity</span><span class="metric-value" id="mEquity">—</span><span class="metric-sub" id="mEquityDiff">—</span></div>
+  <div class="metric"><span class="metric-label">Sistemas activos</span><span class="metric-value acc" id="mTotal">—</span><span class="metric-sub" id="mPassing">—</span></div>
+  <div class="metric"><span class="metric-label">Con ≥ 4 ops</span><span class="metric-value" id="mMin4">—</span><span class="metric-sub">operaciones cerradas</span></div>
+  <div class="metric"><span class="metric-label">Open trades</span><span class="metric-value acc" id="mOpen">—</span><span class="metric-sub" id="mOpenProfit">—</span></div>
+  <div class="metric"><span class="metric-label">Mejor Win %</span><span class="metric-value pos" id="mBestWR">—</span><span class="metric-sub" id="mBestName">—</span></div>
+</div>
+
+<div class="main">
+
+  <div class="info-box">
+    <strong>📡 Para conectar datos reales desde MT5:</strong> copia el archivo <code>RER_IncubadoraMonitor.mq5</code> a tu carpeta <code>MQL5/Experts/</code>, compílalo y arrástralo a un gráfico. Luego inicia <code>server.py</code> con Python (<code>python server.py</code>) y este dashboard se conectará automáticamente cada 10 segundos.<br>
+    Mientras tanto estás viendo <strong>datos demo</strong> basados en tu historial real.
+  </div>
+
+  <div class="section-header">
+    <span class="section-title">Top 15 sistemas</span>
+    <span class="section-count" id="rankCount">—</span>
+    <div class="controls">
+      <button class="ctrl-btn active" onclick="setSort('default',this)">Ops + Win%</button>
+      <button class="ctrl-btn" onclick="setSort('pf',this)">Profit Factor</button>
+      <button class="ctrl-btn" onclick="setSort('profit',this)">Net Profit</button>
+      <button class="ctrl-btn" onclick="setSort('winrate',this)">Win Rate</button>
+    </div>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr>
+        <th style="width:36px">#</th><th>Sistema</th>
+        <th class="r">Ops</th><th class="r">Wins</th><th class="r">Losses</th>
+        <th>Win %</th><th class="r">Loss %</th><th class="r">PF</th>
+        <th class="r">Net Profit</th><th class="r">Abiertos</th>
+        <th style="text-align:center">Criterios</th>
+      </tr></thead>
+      <tbody id="rankBody"></tbody>
+    </table>
+  </div>
+
+  <div class="section-header">
+    <span class="section-title">Todos los sistemas</span>
+    <span class="section-count" id="allCount">—</span>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr>
+        <th>#</th><th>Sistema</th>
+        <th class="r">Ops</th><th class="r">Win%</th><th class="r">Loss%</th>
+        <th class="r">PF</th><th class="r">Net Profit</th>
+        <th style="text-align:center">Estado</th>
+      </tr></thead>
+      <tbody id="allBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<footer>RER Incubadora Monitor · NDX USATECH · Los datos en tiempo real requieren el EA + server.py</footer>
+
+<script>
+let sortMode='default', lastData=null;
+
+const DEMO={
+  account:'RERTRADING1_USATECH',timestamp:Math.floor(Date.now()/1000),
+  received_at:new Date().toISOString(),balance:105832.40,equity:106144.80,
+  systems:[
+    {magic:6070626,name:'H4 BUY_1_30_53(1)',totalTrades:7,wins:6,losses:1,winRate:85.7,lossRate:14.3,pf:4.58,netProfit:766.75,grossWin:1100,grossLoss:240,openTrades:1,openProfit:142.3},
+    {magic:6040626,name:'H4 BUY_1_28_80(1)',totalTrades:10,wins:8,losses:2,winRate:80.0,lossRate:20.0,pf:4.03,netProfit:1297.64,grossWin:1700,grossLoss:422,openTrades:0,openProfit:0},
+    {magic:6230626,name:'H4 BUY_2_19_68',totalTrades:4,wins:3,losses:1,winRate:75.0,lossRate:25.0,pf:6.23,netProfit:899.92,grossWin:1050,grossLoss:168,openTrades:0,openProfit:0},
+    {magic:6170626,name:'H4 BUY_4_28_50',totalTrades:7,wins:5,losses:2,winRate:71.4,lossRate:28.6,pf:2.38,netProfit:1103.58,grossWin:1450,grossLoss:610,openTrades:1,openProfit:88.5},
+    {magic:6270626,name:'H4 BUY_5_7_69',totalTrades:7,wins:5,losses:2,winRate:71.4,lossRate:28.6,pf:2.07,netProfit:1024.68,grossWin:1380,grossLoss:667,openTrades:0,openProfit:0},
+    {magic:6290626,name:'H4 BUY_5_26_46(1)',totalTrades:7,wins:5,losses:2,winRate:71.4,lossRate:28.6,pf:2.03,netProfit:808.83,grossWin:1200,grossLoss:591,openTrades:0,openProfit:0},
+    {magic:6240626,name:'H4 BUY_2_24_79(1)',totalTrades:7,wins:5,losses:2,winRate:71.4,lossRate:28.6,pf:1.67,netProfit:631.32,grossWin:1000,grossLoss:599,openTrades:1,openProfit:-34.2},
+    {magic:6110626,name:'H4 BUY_3_12_69',totalTrades:4,wins:3,losses:1,winRate:75.0,lossRate:25.0,pf:3.25,netProfit:663.03,grossWin:880,grossLoss:271,openTrades:0,openProfit:0},
+    {magic:6260626,name:'H4 BUY_3_16_49(1)',totalTrades:4,wins:3,losses:1,winRate:75.0,lossRate:25.0,pf:3.51,netProfit:509.66,grossWin:700,grossLoss:199,openTrades:0,openProfit:0},
+    {magic:6120626,name:'H4 BUY_3_21_60(1)',totalTrades:4,wins:3,losses:1,winRate:75.0,lossRate:25.0,pf:2.84,netProfit:543.99,grossWin:730,grossLoss:257,openTrades:0,openProfit:0},
+    {magic:6100626,name:'H4 BUY_2_28_58(4)',totalTrades:6,wins:4,losses:2,winRate:66.7,lossRate:33.3,pf:2.85,netProfit:1179.92,grossWin:1550,grossLoss:544,openTrades:0,openProfit:0},
+    {magic:6310626,name:'H4 BUY_5_26_52(1)',totalTrades:5,wins:3,losses:2,winRate:60.0,lossRate:40.0,pf:2.47,netProfit:721.01,grossWin:1010,grossLoss:409,openTrades:0,openProfit:0},
+    {magic:6090626,name:'H4 BUY_2_28_58(3)',totalTrades:5,wins:3,losses:2,winRate:60.0,lossRate:40.0,pf:3.49,netProfit:640.41,grossWin:920,grossLoss:264,openTrades:0,openProfit:0},
+    {magic:6470726,name:'H1 BUY_2_23_46(1)',totalTrades:5,wins:3,losses:2,winRate:60.0,lossRate:40.0,pf:3.99,netProfit:1064.63,grossWin:1350,grossLoss:339,openTrades:1,openProfit:210.0},
+    {magic:6520726,name:'H1 BUY_5_22_78',totalTrades:3,wins:2,losses:1,winRate:66.7,lossRate:33.3,pf:30.56,netProfit:1289.66,grossWin:1330,grossLoss:43,openTrades:0,openProfit:0},
+    {magic:6080626,name:'H4 BUY_1_9_60',totalTrades:3,wins:2,losses:1,winRate:66.7,lossRate:33.3,pf:2.41,netProfit:420.72,grossWin:600,grossLoss:249,openTrades:0,openProfit:0},
+    {magic:6280626,name:'H4 BUY_5_25_84',totalTrades:3,wins:2,losses:1,winRate:66.7,lossRate:33.3,pf:2.16,netProfit:141.30,grossWin:420,grossLoss:194,openTrades:0,openProfit:0},
+    {magic:6210626,name:'H4 BUY_5_26_48',totalTrades:7,wins:4,losses:3,winRate:57.1,lossRate:42.9,pf:1.86,netProfit:527.68,grossWin:1100,grossLoss:591,openTrades:0,openProfit:0},
+    {magic:6020626,name:'H4 BUY_1_25_59(1)',totalTrades:5,wins:3,losses:2,winRate:60.0,lossRate:40.0,pf:1.48,netProfit:448.93,grossWin:750,grossLoss:507,openTrades:0,openProfit:0},
+    {magic:6130626,name:'H4 BUY_3_29_74(3)',totalTrades:6,wins:3,losses:3,winRate:50.0,lossRate:50.0,pf:1.27,netProfit:129.45,grossWin:680,grossLoss:535,openTrades:0,openProfit:0},
+    {magic:6490726,name:'H1 BUY_5_14_82',totalTrades:4,wins:2,losses:2,winRate:50.0,lossRate:50.0,pf:1.12,netProfit:71.53,grossWin:530,grossLoss:473,openTrades:0,openProfit:0},
+    {magic:6530726,name:'H1 BUY_1_26_78(1)',totalTrades:2,wins:2,losses:0,winRate:100.0,lossRate:0,pf:999,netProfit:1346.06,grossWin:1346,grossLoss:0,openTrades:0,openProfit:0},
+    {magic:6060626,name:'H4 BUY_1_29_72',totalTrades:1,wins:1,losses:0,winRate:100.0,lossRate:0,pf:999,netProfit:644.91,grossWin:644,grossLoss:0,openTrades:0,openProfit:0},
+    {magic:6480726,name:'H1 BUY_4_26_60(2)',totalTrades:1,wins:1,losses:0,winRate:100.0,lossRate:0,pf:999,netProfit:641.40,grossWin:641,grossLoss:0,openTrades:0,openProfit:0},
+    {magic:6540726,name:'H1 BUY_2_10_68',totalTrades:1,wins:1,losses:0,winRate:100.0,lossRate:0,pf:999,netProfit:672.65,grossWin:672,grossLoss:0,openTrades:0,openProfit:0},
+    {magic:6460726,name:'H1 BUY_1_15_52',totalTrades:2,wins:1,losses:1,winRate:50.0,lossRate:50.0,pf:1.24,netProfit:118.87,grossWin:220,grossLoss:177,openTrades:0,openProfit:0},
+    {magic:6560726,name:'H1 BUY_2_20_54(1)',totalTrades:2,wins:1,losses:1,winRate:50.0,lossRate:50.0,pf:1.23,netProfit:109.13,grossWin:210,grossLoss:171,openTrades:0,openProfit:0},
+    {magic:6570726,name:'H1 BUY_2_25_66(2)',totalTrades:2,wins:1,losses:1,winRate:50.0,lossRate:50.0,pf:3.33,netProfit:303.42,grossWin:390,grossLoss:117,openTrades:0,openProfit:0},
+    {magic:6050626,name:'H4 BUY_1_29_56',totalTrades:0,wins:0,losses:0,winRate:0,lossRate:0,pf:0,netProfit:0,grossWin:0,grossLoss:0,openTrades:0,openProfit:0},
+    {magic:6580726,name:'H1 BUY_3_24_50(2)',totalTrades:0,wins:0,losses:0,winRate:0,lossRate:0,pf:0,netProfit:0,grossWin:0,grossLoss:0,openTrades:0,openProfit:0},
+  ]
+};
+
+function setSort(mode,el){sortMode=mode;document.querySelectorAll('.ctrl-btn').forEach(b=>b.classList.remove('active'));el.classList.add('active');render(lastData||DEMO);}
+function passes(s){return s.totalTrades>=4&&s.winRate>60&&s.lossRate<30;}
+function pfClass(pf,noLoss){if(noLoss)return'pf-inf';if(pf>=3)return'pf-hi';if(pf>=2)return'pf-mid';return'pf-lo';}
+function pfStr(s){if(s.grossLoss===0&&s.grossWin>0)return'∞';if(s.pf===0&&s.totalTrades===0)return'—';return s.pf.toFixed(2);}
+function barColor(wr){if(wr>70)return'#22c55e';if(wr>60)return'#86efac';if(wr>50)return'#f59e0b';return'#ef4444';}
+function fmt$(n){if(n===undefined||n===null)return'—';const a=Math.abs(n).toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2});return(n>=0?'+$':'-$')+a;}
+function sortSystems(arr,mode){
+  const a=[...arr];
+  if(mode==='pf')return a.sort((x,y)=>(y.pf||0)-(x.pf||0));
+  if(mode==='profit')return a.sort((x,y)=>y.netProfit-x.netProfit);
+  if(mode==='winrate')return a.sort((x,y)=>y.winRate-x.winRate);
+  return a.sort((x,y)=>(y.totalTrades*(y.winRate/100))-(x.totalTrades*(x.winRate/100)));
+}
+
+function render(data){
+  lastData=data;
+  const systems=data.systems||[];
+  const bal=data.balance||0,eq=data.equity||0;
+  document.getElementById('mBalance').textContent='$'+bal.toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2});
+  document.getElementById('mAccount').textContent=data.account||'';
+  document.getElementById('mEquity').textContent='$'+eq.toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const diff=eq-bal;const de=document.getElementById('mEquityDiff');
+  de.textContent=fmt$(diff)+' vs balance';de.style.color=diff>=0?'var(--green)':'var(--red)';
+  const withTrades=systems.filter(s=>s.totalTrades>0);
+  const passing=withTrades.filter(passes);
+  const min4=withTrades.filter(s=>s.totalTrades>=4);
+  document.getElementById('mTotal').textContent=systems.length;
+  document.getElementById('mPassing').textContent=passing.length+' cumplen Win>60% Loss<30%';
+  document.getElementById('mMin4').textContent=min4.length;
+  const totalOpen=systems.reduce((a,s)=>a+(s.openTrades||0),0);
+  const totalOpenPL=systems.reduce((a,s)=>a+(s.openProfit||0),0);
+  document.getElementById('mOpen').textContent=totalOpen;
+  const oe=document.getElementById('mOpenProfit');
+  oe.textContent=fmt$(totalOpenPL)+' flotante';oe.style.color=totalOpenPL>=0?'var(--green)':'var(--red)';
+  const bestWR=withTrades.reduce((a,s)=>s.winRate>a.winRate?s:a,{winRate:0,name:''});
+  document.getElementById('mBestWR').textContent=bestWR.winRate.toFixed(1)+'%';
+  document.getElementById('mBestName').textContent=bestWR.name||'—';
+
+  // TOP 15
+  const eligible=min4;
+  const sorted=sortSystems(eligible,sortMode);
+  const top15=sorted.slice(0,15);
+  document.getElementById('rankCount').textContent=top15.length+' de '+eligible.length;
+  document.getElementById('rankBody').innerHTML=top15.map((s,i)=>{
+    const rank=i+1;
+    const rankCls=rank===1?'r1':rank===2?'r2':rank===3?'r3':'';
+    const ok=passes(s);const rowCls=rank<=3?'top3':ok?'passes':'';
+    const noLoss=s.grossLoss===0&&s.grossWin>0;
+    const wrColor=barColor(s.winRate);
+    const openHtml=s.openTrades>0?`<span class="open-badge"><span class="open-dot"></span>${s.openTrades} (${fmt$(s.openProfit)})</span>`:'<span style="color:var(--muted)">—</span>';
+    const badgeHtml=ok?'<span class="badge badge-pass">✓ PASA</span>':'<span class="badge badge-warn">⚠ Revisar</span>';
+    return`<tr class="${rowCls}">
+      <td><span class="rank ${rankCls}">${rank}</span></td>
+      <td><span class="sys-name">${s.name}</span><span class="sys-magic">${s.magic}</span></td>
+      <td class="r" style="font-family:var(--font-mono);font-weight:700">${s.totalTrades}</td>
+      <td class="r" style="color:var(--green);font-family:var(--font-mono)">${s.wins}</td>
+      <td class="r" style="color:var(--red);font-family:var(--font-mono)">${s.losses}</td>
+      <td style="min-width:120px"><div class="bar-wrap"><div class="bar"><div class="bar-fill" style="width:${s.winRate}%;background:${wrColor}"></div></div><span class="bar-val" style="color:${wrColor}">${s.winRate.toFixed(1)}%</span></div></td>
+      <td class="r" style="color:${s.lossRate<30?'var(--green)':'var(--amber)'};font-family:var(--font-mono)">${s.lossRate.toFixed(1)}%</td>
+      <td class="r"><span class="${pfClass(s.pf,noLoss)}">${pfStr(s)}</span></td>
+      <td class="r"><span class="${s.netProfit>=0?'pos':'neg'}">${fmt$(s.netProfit)}</span></td>
+      <td class="r">${openHtml}</td>
+      <td style="text-align:center">${badgeHtml}</td>
+    </tr>`;
+  }).join('');
+
+  // ALL
+  const allSorted=sortSystems(systems,sortMode);
+  document.getElementById('allCount').textContent=systems.length+' sistemas';
+  document.getElementById('allBody').innerHTML=allSorted.map((s,i)=>{
+    const ok=passes(s);const noLoss=s.grossLoss===0&&s.grossWin>0;
+    const wrColor=s.totalTrades>0?barColor(s.winRate):'var(--muted)';
+    const badgeHtml=s.totalTrades===0?'<span class="badge badge-nd">Sin datos</span>':ok?'<span class="badge badge-pass">✓ PASA</span>':'<span class="badge badge-warn">⚠ Revisar</span>';
+    return`<tr>
+      <td style="color:var(--muted);font-size:11px;font-family:var(--font-mono)">${i+1}</td>
+      <td><span style="font-weight:500">${s.name}</span><span class="sys-magic">${s.magic}</span></td>
+      <td class="r" style="font-family:var(--font-mono)">${s.totalTrades||'—'}</td>
+      <td class="r" style="color:${wrColor};font-family:var(--font-mono);font-weight:600">${s.totalTrades>0?s.winRate.toFixed(1)+'%':'—'}</td>
+      <td class="r" style="color:${s.lossRate<30&&s.totalTrades>0?'var(--green)':'var(--muted)'};font-family:var(--font-mono)">${s.totalTrades>0?s.lossRate.toFixed(1)+'%':'—'}</td>
+      <td class="r"><span class="${pfClass(s.pf,noLoss)}">${pfStr(s)}</span></td>
+      <td class="r"><span class="${s.netProfit>=0?'pos':'neg'}">${s.totalTrades>0?fmt$(s.netProfit):'—'}</span></td>
+      <td style="text-align:center">${badgeHtml}</td>
+    </tr>`;
+  }).join('');
+}
+
+// Intentar conectar al servidor cada 10s; si falla, demo
+async function fetchData(){
+  try{
+    const res=await fetch('http://localhost:8080/data',{signal:AbortSignal.timeout(3000)});
+    const data=await res.json();
+    lastData=data;
+    document.getElementById('liveDot').className='live-dot';
+    document.getElementById('liveLabel').textContent='En vivo — MT5';
+    document.getElementById('lastUpdate').textContent='Actualizado '+new Date().toLocaleTimeString('es-ES');
+    render(data);
+  }catch(e){
+    if(!lastData||lastData===DEMO){
+      document.getElementById('liveDot').className='live-dot stale';
+      document.getElementById('liveLabel').textContent='Modo demo';
+      document.getElementById('lastUpdate').textContent='Demo — inicia server.py para datos reales';
+      render(DEMO);
+    }
+  }
+}
+
+render(DEMO);
+fetchData();
+setInterval(fetchData,10000);
+</script>
+</body>
+</html>
